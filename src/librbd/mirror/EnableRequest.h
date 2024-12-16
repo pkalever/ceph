@@ -30,11 +30,14 @@ public:
                                bool image_clean, int64_t group_pool_id,
                                const std::string &group_id,
                                const std::string &group_snap_id,
-                               uint64_t *snap_id, Context *on_finish) {
+                               uint64_t *snap_id,
+                               bool need_implicit_snap,
+                               Context *on_finish) {
     return new EnableRequest(image_ctx->md_ctx, image_ctx->id, image_ctx, mode,
                              non_primary_global_image_id, image_clean,
                              image_ctx->op_work_queue, group_pool_id, group_id,
-                             group_snap_id, snap_id, on_finish);
+                             group_snap_id, snap_id, need_implicit_snap,
+                             on_finish);
   }
   static EnableRequest *create(ImageCtxT *image_ctx,
                                cls::rbd::MirrorImageMode mode,
@@ -43,7 +46,7 @@ public:
     return new EnableRequest(image_ctx->md_ctx, image_ctx->id, image_ctx, mode,
                              non_primary_global_image_id, image_clean,
                              image_ctx->op_work_queue, -1, {}, {}, nullptr,
-                             on_finish);
+                             true, on_finish);
   }
   static EnableRequest *create(librados::IoCtx &io_ctx,
                                const std::string &image_id,
@@ -53,7 +56,8 @@ public:
                                Context *on_finish) {
     return new EnableRequest(io_ctx, image_id, nullptr, mode,
                              non_primary_global_image_id, image_clean,
-                             op_work_queue, -1, {}, {}, nullptr, on_finish);
+                             op_work_queue, -1, {}, {}, nullptr, true,
+                             on_finish);
   }
 
   void send();
@@ -97,7 +101,7 @@ private:
                 bool image_clean, asio::ContextWQ *op_work_queue,
                 int64_t group_pool_id, const std::string &group_id,
                 const std::string &group_snap_id, uint64_t *snap_id,
-                Context *on_finish);
+                bool need_implicit_snap, Context *on_finish);
 
   librados::IoCtx &m_io_ctx;
   const std::string m_image_id;
@@ -110,6 +114,7 @@ private:
   const std::string m_group_id;
   const std::string m_group_snap_id;
   uint64_t *m_snap_id;
+  bool m_need_implicit_snap;
   Context *m_on_finish;
 
   CephContext *m_cct = nullptr;

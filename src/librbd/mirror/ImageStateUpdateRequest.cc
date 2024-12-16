@@ -115,7 +115,8 @@ void ImageStateUpdateRequest<I>::handle_set_mirror_image(int r) {
     return;
   }
 
-  notify_mirroring_watcher();
+  //notify_mirroring_watcher();
+  finish(0);
 }
 
 template <typename I>

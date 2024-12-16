@@ -34,12 +34,14 @@ EnableRequest<I>::EnableRequest(librados::IoCtx &io_ctx,
                                 const std::string &group_id,
                                 const std::string &group_snap_id,
                                 uint64_t *snap_id,
+                                bool need_implicit_snap,
                                 Context *on_finish)
   : m_io_ctx(io_ctx), m_image_id(image_id), m_image_ctx(image_ctx),
     m_mode(mode), m_non_primary_global_image_id(non_primary_global_image_id),
     m_image_clean(image_clean), m_op_work_queue(op_work_queue),
     m_group_pool_id(group_pool_id), m_group_id(group_id),
-    m_group_snap_id(group_snap_id), m_snap_id(snap_id), m_on_finish(on_finish),
+    m_group_snap_id(group_snap_id), m_snap_id(snap_id),
+    m_need_implicit_snap(need_implicit_snap), m_on_finish(on_finish),
     m_cct(reinterpret_cast<CephContext*>(io_ctx.cct())) {
 }
 
@@ -93,7 +95,7 @@ void EnableRequest<I>::handle_get_mirror_image(int r) {
     return;
   } else if (r == -ENOENT) {
     r = 0;
-    if (!m_group_snap_id.empty()) {
+    if (!m_group_snap_id.empty() || !m_need_implicit_snap) {
       m_mirror_image.type = cls::rbd::MIRROR_IMAGE_TYPE_GROUP;
     }
   } else {
@@ -161,7 +163,11 @@ void EnableRequest<I>::open_image() {
     enable_non_primary_feature();
     return;
   } else if (m_image_ctx != nullptr) {
-    create_primary_snapshot();
+    if (m_need_implicit_snap) {
+      create_primary_snapshot();
+    } else {
+      image_state_update();
+    }
     return;
   }
 
@@ -187,7 +193,11 @@ void EnableRequest<I>::handle_open_image(int r) {
     return;
   }
 
-  create_primary_snapshot();
+  if (m_need_implicit_snap) {
+    create_primary_snapshot();
+  } else {
+    close_image();
+  }
 }
 
 template <typename I>
