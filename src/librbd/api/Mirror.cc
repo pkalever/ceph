@@ -2833,8 +2833,6 @@ int Mirror<I>::group_disable(IoCtx& group_ioctx, const char *group_name,
     }
   }
 
-  auto image_count = image_ctxs.size();
-
   close_images(&image_ctxs);
 
   // undo an image disable might not be of our interest. If needed, user must
@@ -2877,15 +2875,6 @@ int Mirror<I>::group_disable(IoCtx& group_ioctx, const char *group_name,
     lderr(cct) << "failed to remove mirroring group metadata: "
                << cpp_strerror(r) << dendl;
     return r;
-  }
-
-  r = MirroringWatcher<I>::notify_group_updated(
-        group_ioctx, cls::rbd::MIRROR_GROUP_STATE_DISABLED, group_id,
-        mirror_group.global_group_id, image_count);
-  if (r < 0) {
-    lderr(cct) << "failed to notify mirroring group=" << group_name
-               << " updated: " << cpp_strerror(r) << dendl;
-    // not fatal
   }
 
   return 0;
@@ -3387,23 +3376,6 @@ int Mirror<I>::group_resync(IoCtx& group_ioctx, const char *group_name) {
   if (r < 0) {
     lderr(cct) << "failed setting metadata: " << cpp_strerror(r) << dendl;
     return r;
-  }
-
-  std::vector<cls::rbd::GroupImageStatus> images;
-  r = Group<I>::group_image_list_by_id(group_ioctx, group_id, &images);
-  if (r < 0) {
-    lderr(cct) << "listing images in group=" << group_name
-               << " failed: " << cpp_strerror(r) << dendl;
-    return r;
-  }
-
-  r = MirroringWatcher<I>::notify_group_updated(
-        group_ioctx, cls::rbd::MIRROR_GROUP_STATE_DISABLED, group_id,
-        mirror_group.global_group_id, images.size());
-  if (r < 0) {
-    lderr(cct) << "failed to notify mirroring group=" << group_name
-               << " updated: " << cpp_strerror(r) << dendl;
-    // not fatal
   }
 
   return 0;
