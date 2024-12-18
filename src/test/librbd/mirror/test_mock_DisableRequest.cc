@@ -327,7 +327,7 @@ TEST_F(TestMockMirrorDisableRequest, Success) {
     mock_image_ctx, mock_image_remove_request, 0);
 
   C_SaferCond ctx;
-  auto req = new MockDisableRequest(&mock_image_ctx, false, true, &ctx);
+  auto req = new MockDisableRequest(&mock_image_ctx, false, true, true, &ctx);
   req->send();
   ASSERT_EQ(0, ctx.wait());
 }
@@ -355,7 +355,7 @@ TEST_F(TestMockMirrorDisableRequest, SuccessNoRemove) {
   expect_journal_client_list(mock_image_ctx, {}, 0);
 
   C_SaferCond ctx;
-  auto req = new MockDisableRequest(&mock_image_ctx, false, false, &ctx);
+  auto req = new MockDisableRequest(&mock_image_ctx, false, false, true, &ctx);
   req->send();
   ASSERT_EQ(0, ctx.wait());
 }
@@ -389,7 +389,7 @@ TEST_F(TestMockMirrorDisableRequest, SuccessNonPrimary) {
     mock_image_ctx, mock_image_remove_request, 0);
 
   C_SaferCond ctx;
-  auto req = new MockDisableRequest(&mock_image_ctx, true, true, &ctx);
+  auto req = new MockDisableRequest(&mock_image_ctx, true, true, true, &ctx);
   req->send();
   ASSERT_EQ(0, ctx.wait());
 }
@@ -413,7 +413,7 @@ TEST_F(TestMockMirrorDisableRequest, NonPrimaryError) {
      cls::rbd::MIRROR_IMAGE_STATE_ENABLED}, PROMOTION_STATE_NON_PRIMARY, 0);
 
   C_SaferCond ctx;
-  auto req = new MockDisableRequest(&mock_image_ctx, false, false, &ctx);
+  auto req = new MockDisableRequest(&mock_image_ctx, false, false, true, &ctx);
   req->send();
   ASSERT_EQ(-EINVAL, ctx.wait());
 }
@@ -437,7 +437,7 @@ TEST_F(TestMockMirrorDisableRequest, GetMirrorInfoError) {
      cls::rbd::MIRROR_IMAGE_STATE_ENABLED}, PROMOTION_STATE_PRIMARY, -EINVAL);
 
   C_SaferCond ctx;
-  auto req = new MockDisableRequest(&mock_image_ctx, false, true, &ctx);
+  auto req = new MockDisableRequest(&mock_image_ctx, false, true, true, &ctx);
   req->send();
   ASSERT_EQ(-EINVAL, ctx.wait());
 }
@@ -464,7 +464,7 @@ TEST_F(TestMockMirrorDisableRequest, MirrorImageSetError) {
     mock_image_ctx, mock_image_state_update_request, -ENOENT);
 
   C_SaferCond ctx;
-  auto req = new MockDisableRequest(&mock_image_ctx, false, true, &ctx);
+  auto req = new MockDisableRequest(&mock_image_ctx, false, true, true, &ctx);
   req->send();
   ASSERT_EQ(-ENOENT, ctx.wait());
 }
@@ -491,7 +491,7 @@ TEST_F(TestMockMirrorDisableRequest, JournalPromoteError) {
   expect_journal_promote(mock_image_ctx, mock_promote_request, -EPERM);
 
   C_SaferCond ctx;
-  auto req = new MockDisableRequest(&mock_image_ctx, true, true, &ctx);
+  auto req = new MockDisableRequest(&mock_image_ctx, true, true, true, &ctx);
   req->send();
   ASSERT_EQ(-EPERM, ctx.wait());
 }
@@ -519,7 +519,7 @@ TEST_F(TestMockMirrorDisableRequest, JournalClientListError) {
   expect_journal_client_list(mock_image_ctx, {}, -EBADMSG);
 
   C_SaferCond ctx;
-  auto req = new MockDisableRequest(&mock_image_ctx, false, true, &ctx);
+  auto req = new MockDisableRequest(&mock_image_ctx, false, true, true, &ctx);
   req->send();
   ASSERT_EQ(-EBADMSG, ctx.wait());
 }
@@ -558,7 +558,7 @@ TEST_F(TestMockMirrorDisableRequest, SnapRemoveError) {
   expect_journal_client_unregister(mock_image_ctx, "peer 1", 0);
 
   C_SaferCond ctx;
-  auto req = new MockDisableRequest(&mock_image_ctx, false, true, &ctx);
+  auto req = new MockDisableRequest(&mock_image_ctx, false, true, true, &ctx);
   req->send();
   ASSERT_EQ(-EPERM, ctx.wait());
 }
@@ -598,7 +598,7 @@ TEST_F(TestMockMirrorDisableRequest, JournalClientUnregisterError) {
   expect_journal_client_unregister(mock_image_ctx, "peer 2", 0);
 
   C_SaferCond ctx;
-  auto req = new MockDisableRequest(&mock_image_ctx, false, true, &ctx);
+  auto req = new MockDisableRequest(&mock_image_ctx, false, true, true, &ctx);
   req->send();
   ASSERT_EQ(-EINVAL, ctx.wait());
 }
@@ -625,7 +625,7 @@ TEST_F(TestMockMirrorDisableRequest, SnapshotPromoteError) {
   expect_snapshot_promote(mock_image_ctx, mock_promote_request, -EPERM);
 
   C_SaferCond ctx;
-  auto req = new MockDisableRequest(&mock_image_ctx, true, true, &ctx);
+  auto req = new MockDisableRequest(&mock_image_ctx, true, true, true, &ctx);
   req->send();
   ASSERT_EQ(-EPERM, ctx.wait());
 }
@@ -654,7 +654,7 @@ TEST_F(TestMockMirrorDisableRequest, RefreshError) {
   expect_refresh_image(mock_image_ctx, -EPERM);
 
   C_SaferCond ctx;
-  auto req = new MockDisableRequest(&mock_image_ctx, true, true, &ctx);
+  auto req = new MockDisableRequest(&mock_image_ctx, true, true, true, &ctx);
   req->send();
   ASSERT_EQ(-EPERM, ctx.wait());
 }
@@ -685,7 +685,7 @@ TEST_F(TestMockMirrorDisableRequest, MirrorImageRemoveError) {
     mock_image_ctx, mock_image_remove_request, -EINVAL);
 
   C_SaferCond ctx;
-  auto req = new MockDisableRequest(&mock_image_ctx, false, true, &ctx);
+  auto req = new MockDisableRequest(&mock_image_ctx, false, true, true, &ctx);
   req->send();
   ASSERT_EQ(-EINVAL, ctx.wait());
 }

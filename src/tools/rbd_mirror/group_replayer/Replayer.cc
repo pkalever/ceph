@@ -336,7 +336,7 @@ void Replayer<I>::validate_image_snaps_sync_complete(
   }
 
   // Check the image snapshot count in the remote group snap
-  if (itr->snaps.size() > local_images.size()) {
+  if (itr->snaps.size() != local_images.size()) {
     dout(20) << "group membership changed, will retry later, remote snapshot images count: "
          << itr->snaps.size() << ", local group images count: "
          << local_images.size() << dendl;

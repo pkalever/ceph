@@ -25,12 +25,19 @@ template <typename ImageCtxT = ImageCtx>
 class DisableRequest {
 public:
   static DisableRequest *create(ImageCtxT *image_ctx, bool force,
+                                bool remove, bool remove_snaps,
+                                Context *on_finish) {
+    return new DisableRequest(image_ctx, force, remove,
+                              remove_snaps, on_finish);
+  }
+
+  static DisableRequest *create(ImageCtxT *image_ctx, bool force,
                                 bool remove, Context *on_finish) {
-    return new DisableRequest(image_ctx, force, remove, on_finish);
+    return new DisableRequest(image_ctx, force, remove, true, on_finish);
   }
 
   DisableRequest(ImageCtxT *image_ctx, bool force, bool remove,
-                 Context *on_finish);
+                 bool remove_snaps, Context *on_finish);
 
   void send();
 
@@ -79,6 +86,7 @@ private:
   ImageCtxT *m_image_ctx;
   bool m_force;
   bool m_remove;
+  bool m_remove_snaps;
   Context *m_on_finish;
 
   bool m_is_primary = false;

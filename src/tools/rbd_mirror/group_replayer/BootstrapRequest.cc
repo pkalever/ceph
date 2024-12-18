@@ -957,7 +957,10 @@ void BootstrapRequest<I>::handle_remove_local_image_from_group(int r) {
     return;
   }
 
-  move_local_image_to_trash();
+  // TODO: delete the image only after all the snaps are removed from the
+  // previous groups. So it makesense to do it from the GR
+  //move_local_image_to_trash();
+  finish(0);
 }
 
 template <typename I>

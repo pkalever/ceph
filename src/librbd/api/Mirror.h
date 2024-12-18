@@ -97,6 +97,7 @@ struct Mirror {
                           uint64_t *snap_id,
                           bool need_implicit_snap);
   static int image_disable(ImageCtxT *ictx, bool force);
+  static int image_disable(ImageCtxT *ictx, bool force, bool remove_snaps);
   static int image_promote(ImageCtxT *ictx, bool force);
   static void image_promote(ImageCtxT *ictx, bool force, Context *on_finish);
   static void image_promote(ImageCtxT *ictx,

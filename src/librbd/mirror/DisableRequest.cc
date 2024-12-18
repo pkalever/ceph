@@ -30,9 +30,9 @@ using util::create_rados_callback;
 
 template <typename I>
 DisableRequest<I>::DisableRequest(I *image_ctx, bool force, bool remove,
-                                  Context *on_finish)
+                                  bool remove_snaps, Context *on_finish)
   : m_image_ctx(image_ctx), m_force(force), m_remove(remove),
-    m_on_finish(on_finish) {
+    m_remove_snaps(remove_snaps), m_on_finish(on_finish) {
 }
 
 template <typename I>
@@ -82,7 +82,11 @@ Context *DisableRequest<I>::handle_get_mirror_info(int *result) {
     return m_on_finish;
   }
 
-  send_image_state_update();
+  if (!m_remove_snaps) {
+    send_image_state_update();
+  } else {
+    send_refresh_image();
+  }
   return nullptr;
 }
 
@@ -193,7 +197,11 @@ void DisableRequest<I>::clean_mirror_state() {
   ldout(cct, 10) << dendl;
 
   if (m_mirror_image.mode == cls::rbd::MIRROR_IMAGE_MODE_SNAPSHOT) {
-    remove_mirror_snapshots();
+    if (m_remove_snaps) {
+      remove_mirror_snapshots();
+    } else {
+      send_remove_mirror_image();
+    }
   } else {
     send_get_clients();
   }
