@@ -41,6 +41,10 @@ Replayer<I>::Replayer(
     const std::string &global_group_id,
     const std::string& local_mirror_uuid,
     const std::string& remote_mirror_uuid,
+    InstanceWatcher<I> *instance_watcher,
+    MirrorStatusUpdater<I> *local_status_updater,
+    MirrorStatusUpdater<I> *remote_status_updater,
+    journal::CacheManagerHandler *cache_manager_handler,
     PoolMetaCache* pool_meta_cache,
     std::string local_group_id,
     std::string remote_group_id,
@@ -52,6 +56,10 @@ Replayer<I>::Replayer(
     m_global_group_id(global_group_id),
     m_local_mirror_uuid(local_mirror_uuid),
     m_remote_mirror_uuid(remote_mirror_uuid),
+    m_instance_watcher(instance_watcher),
+    m_local_status_updater(local_status_updater),
+    m_remote_status_updater(remote_status_updater),
+    m_cache_manager_handler(cache_manager_handler),
     m_pool_meta_cache(pool_meta_cache),
     m_local_group_id(local_group_id),
     m_remote_group_id(remote_group_id),
@@ -477,8 +485,12 @@ void Replayer<I>::scan_for_unsynced_group_snapshots(
           return s.id == id;
           });
       if (found && itl == m_local_group_snaps.end()) {
-        try_create_group_snapshot(*next_remote_snap);
         locker.unlock();
+        C_SaferCond *ctx = new C_SaferCond;
+        create_replayers(&(*next_remote_snap), ctx);
+        ctx->wait();
+        std::unique_lock locker{m_lock};
+        try_create_group_snapshot(*next_remote_snap);
         return;
       }
     }
@@ -511,8 +523,12 @@ void Replayer<I>::scan_for_unsynced_group_snapshots(
         });
     if (remote_snap != m_remote_group_snaps.rend() &&
         itl == m_local_group_snaps.end()) {
-      try_create_group_snapshot(*remote_snap);
       locker.unlock();
+      C_SaferCond *ctx = new C_SaferCond;
+      create_replayers(&(*remote_snap), ctx);
+      ctx->wait();
+      std::unique_lock locker{m_lock};
+      try_create_group_snapshot(*remote_snap);
       return;
     }
   }
@@ -951,6 +967,217 @@ void Replayer<I>::shut_down(Context* on_finish) {
   return;
 }
 
+template <typename I>
+void Replayer<I>::create_replayers(cls::rbd::GroupSnapshot *group_snap, Context* on_finish) {
+  dout(10) << dendl;
+  m_remote_snap_members.clear();
+  for (auto &image_snap : group_snap->snaps) {
+    cls::rbd::MirrorImage mirror_image;
+      int r = librbd::cls_client::mirror_image_get(&m_remote_io_ctx,
+                                               image_snap.image_id,
+                                               &mirror_image);
+      if (r < 0) {
+        derr << "mirror image get failed for: " << image_snap.image_id << " : "
+             << cpp_strerror(r) << dendl;
+      }
+       m_remote_snap_members[{image_snap.pool, mirror_image.global_image_id}] = image_snap.image_id;
+  }
+
+  for (auto &[p, image_id]: m_remote_snap_members) {
+    dout(10) << "PK: members { pool_id: " << p.first
+             << ", global_image_id: " << p.second
+             << " }, image_id: " << image_id << dendl;
+  }
+
+  create_replayers_2(on_finish);
+  //on_finish->complete(0);
+}
+
+// Create replayers based on group snapshot
+// get images from group snapshot
+//
+template <typename I>
+int Replayer<I>::create_replayers_2(Context* on_finish) {
+  dout(10) << dendl;
+
+  int r = 0;
+  //if (m_remote_mirror_group.state == cls::rbd::MIRROR_GROUP_STATE_ENABLED &&
+  //    m_remote_mirror_group_primary) {
+
+    for (auto &[p, remote_image_id] : m_remote_snap_members) {
+      auto &remote_pool_id = p.first;
+      auto &global_image_id = p.second;
+
+      m_image_replayers_2.emplace_back(librados::IoCtx(), nullptr);
+      auto &local_io_ctx = m_image_replayers_2.back().first;
+      auto &image_replayer = m_image_replayers_2.back().second;
+
+      RemotePoolMeta remote_pool_meta;
+      r = m_pool_meta_cache->get_remote_pool_meta(remote_pool_id,
+                                                  &remote_pool_meta);
+      if (r < 0 || remote_pool_meta.mirror_peer_uuid.empty()) {
+        derr << "failed to retrieve mirror peer uuid from remote image pool"
+             << dendl;
+        r = -ENOENT;
+        break;
+      }
+
+      librados::IoCtx remote_io_ctx;
+      r = librbd::util::create_ioctx(m_remote_io_ctx, "remote image pool",
+                                     remote_pool_id, {}, &remote_io_ctx);
+      if (r < 0) {
+        derr << "failed to open remote image pool " << remote_pool_id << ": "
+             << cpp_strerror(r) << dendl;
+        if (r == -ENOENT) {
+          r = -EINVAL;
+        }
+        break;
+      }
+
+      int64_t local_pool_id = librados::Rados(m_local_io_ctx).pool_lookup(
+          remote_io_ctx.get_pool_name().c_str());
+
+      LocalPoolMeta local_pool_meta;
+      r = m_pool_meta_cache->get_local_pool_meta(local_pool_id,
+                                                 &local_pool_meta);
+      if (r < 0 || local_pool_meta.mirror_uuid.empty()) {
+        if (r == 0 || r == -ENOENT) {
+          r = -EINVAL;
+        }
+        derr << "failed to retrieve mirror uuid from local image pool" << dendl;
+        break;
+      }
+
+      r = librbd::util::create_ioctx(m_local_io_ctx, "local image pool",
+                                     local_pool_id, {}, &local_io_ctx);
+      if (r < 0) {
+        derr << "failed to open local image pool " << local_pool_id << ": "
+             << cpp_strerror(r) << dendl;
+        if (r == -ENOENT) {
+          r = -EINVAL;
+        }
+        break;
+      }
+
+      image_replayer = ImageReplayer<I>::create(
+        local_io_ctx, m_local_group_ctx, local_pool_meta.mirror_uuid,
+        global_image_id, m_threads, m_instance_watcher, m_local_status_updater,
+        m_cache_manager_handler, m_pool_meta_cache);
+
+      // TODO only a single peer is currently supported
+      image_replayer->add_peer({local_pool_meta.mirror_uuid, remote_io_ctx,
+                                remote_pool_meta, m_remote_status_updater});
+
+      m_image_replayer_index[{remote_pool_id, remote_image_id}] = image_replayer;
+    }
+  //}
+  /* else if (m_local_mirror_group.state == cls::rbd::MIRROR_GROUP_STATE_ENABLED &&
+             m_local_mirror_group_primary) {
+    for (auto &[local_pool_id, global_image_id] : m_local_images) {
+      m_image_replayers->emplace_back(librados::IoCtx(), nullptr);
+      auto &local_io_ctx = m_image_replayers->back().first;
+      auto &image_replayer = m_image_replayers->back().second;
+
+      LocalPoolMeta local_pool_meta;
+      r = m_pool_meta_cache->get_local_pool_meta(local_pool_id,
+                                                 &local_pool_meta);
+      if (r < 0 || local_pool_meta.mirror_uuid.empty()) {
+        if (r == 0 || r == -ENOENT) {
+          r = -EINVAL;
+        }
+        derr << "failed to retrieve mirror uuid from local image pool" << dendl;
+        break;
+      }
+
+      r = librbd::util::create_ioctx(m_local_io_ctx, "local image pool",
+                                     local_pool_id, {}, &local_io_ctx);
+      if (r < 0) {
+        derr << "failed to open local image pool " << local_pool_id << ": "
+             << cpp_strerror(r) << dendl;
+        if (r == -ENOENT) {
+          r = -EINVAL;
+        }
+        break;
+      }
+
+      int64_t remote_pool_id = librados::Rados(m_remote_io_ctx).pool_lookup(
+          local_io_ctx.get_pool_name().c_str());
+
+      RemotePoolMeta remote_pool_meta;
+      r = m_pool_meta_cache->get_remote_pool_meta(remote_pool_id,
+                                                  &remote_pool_meta);
+      if (r < 0 || remote_pool_meta.mirror_peer_uuid.empty()) {
+        derr << "failed to retrieve mirror peer uuid from remote image pool"
+             << dendl;
+        r = -ENOENT;
+        break;
+      }
+
+      librados::IoCtx remote_io_ctx;
+      r = librbd::util::create_ioctx(m_remote_io_ctx, "remote image pool",
+                                     remote_pool_id, {}, &remote_io_ctx);
+      if (r < 0) {
+        derr << "failed to open remote image pool " << remote_pool_id << ": "
+             << cpp_strerror(r) << dendl;
+        if (r == -ENOENT) {
+          r = -EINVAL;
+        }
+        break;
+      }
+
+      image_replayer = ImageReplayer<I>::create(
+        local_io_ctx, m_local_group_ctx, local_pool_meta.mirror_uuid,
+        global_image_id, m_threads, m_instance_watcher, m_local_status_updater,
+        m_cache_manager_handler, m_pool_meta_cache);
+
+      // TODO only a single peer is currently supported
+      image_replayer->add_peer({local_pool_meta.mirror_uuid, remote_io_ctx,
+                                remote_pool_meta, m_remote_status_updater});
+    }
+  } else {
+    ceph_abort();
+  } */
+
+  if (r < 0) {
+    for (auto &[_, image_replayer] : m_image_replayers_2) {
+      delete image_replayer;
+    }
+    m_image_replayers_2.clear();
+    return r;
+  }
+
+  start_image_replayers(on_finish);
+
+  return 0;
+}
+
+template <typename I>
+void Replayer<I>::start_image_replayers(Context* on_finish) {
+  dout(10) << m_image_replayers_2.size() << dendl;
+
+  //set_mirror_group_status_update(
+  //  cls::rbd::MIRROR_GROUP_STATUS_STATE_STARTING_REPLAY, "starting replay");
+
+  auto ctx = new LambdaContext(
+    [this, on_finish](int r) {
+      handle_start_image_replayers(r, on_finish);
+    });
+
+  C_Gather *gather_ctx = new C_Gather(g_ceph_context, ctx);
+  {
+    std::lock_guard locker{m_lock};
+    for (auto &[_, image_replayer] : m_image_replayers_2) {
+      image_replayer->start(gather_ctx->new_sub(), false);
+    }
+  }
+  gather_ctx->activate();
+}
+
+template <typename I>
+void Replayer<I>::handle_start_image_replayers(int r, Context* on_finish) {
+  dout(10) << "r=" << r << dendl;
+  on_finish->complete(0);
+}
 
 } // namespace group_replayer
 } // namespace mirror

@@ -1305,7 +1305,7 @@ void BootstrapRequest<I>::finish(int r) {
     } else {
       *m_local_group_ctx = {m_group_name, *m_local_group_id, m_global_group_id,
                             m_local_mirror_group_primary, m_local_io_ctx};
-      r = create_replayers();
+      //r = create_replayers();
     }
   }
 

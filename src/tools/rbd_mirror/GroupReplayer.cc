@@ -611,8 +611,10 @@ void GroupReplayer<I>::create_group_replayer(Context *on_finish) {
 
   m_replayer = group_replayer::Replayer<I>::create(
     m_threads, m_local_io_ctx, m_remote_group_peer.io_ctx, m_global_group_id,
-    m_local_mirror_uuid, m_remote_group_peer.uuid, m_pool_meta_cache,
-    m_local_group_id, m_remote_group_id, &m_local_group_ctx, &m_image_replayers);
+    m_local_mirror_uuid, m_remote_group_peer.uuid, m_instance_watcher,
+    m_local_status_updater, m_remote_group_peer.mirror_status_updater,
+    m_cache_manager_handler, m_pool_meta_cache, m_local_group_id,
+    m_remote_group_id, &m_local_group_ctx, &m_image_replayers);
 
   m_replayer->init(ctx);
 }
@@ -627,7 +629,16 @@ void GroupReplayer<I>::handle_create_group_replayer(int r, Context *on_finish) {
     return;
   }
   on_finish->complete(0);
-  start_image_replayers();
+  //start_image_replayers();
+
+  if (finish_start_if_interrupted()) {
+    return;
+  } else if (r < 0) {
+    finish_start(r, "");
+    return;
+  }
+
+  finish_start(0, "");
 }
 
 template <typename I>

@@ -28,9 +28,10 @@ void GetMirrorImageIdRequest<I>::send() {
   get_image_id();
 }
 
+/*
 template <typename I>
 void GetMirrorImageIdRequest<I>::get_image_id() {
-  dout(20) << dendl;
+  dout(20) << "m_global_image_id: " << m_global_image_id << dendl;
 
   // attempt to cross-reference a image id by the global image id
   librados::ObjectReadOperation op;
@@ -69,6 +70,26 @@ void GetMirrorImageIdRequest<I>::handle_get_image_id(int r) {
 
   finish(0);
 }
+*/
+template <typename I>
+void GetMirrorImageIdRequest<I>::get_image_id() {
+  dout(20) << "m_global_image_id: " << m_global_image_id << dendl;
+
+  int r = librbd::cls_client::mirror_image_get_image_id(&m_io_ctx, m_global_image_id, m_image_id);
+  if (r < 0) {
+    if (r == -ENOENT) {
+      dout(10) << "global image " << m_global_image_id << " not registered"
+               << dendl;
+    } else {
+      derr << "failed to retrieve image id: " << cpp_strerror(r) << dendl;
+    }
+    finish(r);
+    return;
+  }
+  finish(0);
+}
+
+
 
 template <typename I>
 void GetMirrorImageIdRequest<I>::finish(int r) {

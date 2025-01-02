@@ -67,6 +67,8 @@ void GetInfoRequest<I>::get_mirror_image() {
   comp->release();
 }
 
+
+// Here: same problem async replay
 template <typename I>
 void GetInfoRequest<I>::handle_get_mirror_image(int r) {
   ldout(m_cct, 20) << "r=" << r << dendl;

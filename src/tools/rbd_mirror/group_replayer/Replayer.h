@@ -14,18 +14,23 @@
 #include <string>
 
 class Context;
+
+namespace journal { struct CacheManagerHandler; }
 namespace librbd { class ImageCtx; }
 
 namespace rbd {
 namespace mirror {
 
-template <typename> class ImageReplayer;
-class PoolMetaCache;
+struct GroupCtx;
+template <typename> struct ImageReplayer;
+template <typename> struct InstanceWatcher;
+template <typename> struct MirrorStatusUpdater;
+struct PoolMetaCache;
 template <typename> struct Threads;
 
 namespace group_replayer {
 
-template <typename ImageCtxT = librbd::ImageCtx>
+  template <typename ImageCtxT = librbd::ImageCtx>
 class Replayer {
 public:
   static Replayer* create(
@@ -35,14 +40,20 @@ public:
       const std::string &global_group_id,
       const std::string& local_mirror_uuid,
       const std::string& remote_mirror_uuid,
+      InstanceWatcher<ImageCtxT> *instance_watcher,
+      MirrorStatusUpdater<ImageCtxT> *local_status_updater,
+      MirrorStatusUpdater<ImageCtxT> *remote_status_updater,
+      journal::CacheManagerHandler *cache_manager_handler,
       PoolMetaCache* pool_meta_cache,
       std::string local_group_id,
       std::string remote_group_id,
       GroupCtx *local_group_ctx,
       std::list<std::pair<librados::IoCtx, ImageReplayer<ImageCtxT> *>> *image_replayers) {
     return new Replayer(threads, local_io_ctx, remote_io_ctx, global_group_id,
-        local_mirror_uuid, remote_mirror_uuid, pool_meta_cache, local_group_id,
-        remote_group_id, local_group_ctx, image_replayers);
+        local_mirror_uuid, remote_mirror_uuid, instance_watcher,
+        local_status_updater, remote_status_updater, cache_manager_handler,
+        pool_meta_cache, local_group_id, remote_group_id, local_group_ctx,
+        image_replayers);
   }
 
   Replayer(
@@ -52,6 +63,10 @@ public:
       const std::string &global_group_id,
       const std::string& local_mirror_uuid,
       const std::string& remote_mirror_uuid,
+      InstanceWatcher<ImageCtxT> *instance_watcher,
+      MirrorStatusUpdater<ImageCtxT> *local_status_updater,
+      MirrorStatusUpdater<ImageCtxT> *remote_status_updater,
+      journal::CacheManagerHandler *cache_manager_handler,
       PoolMetaCache* pool_meta_cache,
       std::string local_group_id,
       std::string remote_group_id,
@@ -84,11 +99,17 @@ private:
   std::string m_global_group_id;
   std::string m_local_mirror_uuid;
   std::string m_remote_mirror_uuid;
+  InstanceWatcher<ImageCtxT> *m_instance_watcher;
+  MirrorStatusUpdater<ImageCtxT> *m_local_status_updater;
+  MirrorStatusUpdater<ImageCtxT> *m_remote_status_updater;
+  journal::CacheManagerHandler *m_cache_manager_handler;
   PoolMetaCache* m_pool_meta_cache;
   std::string m_local_group_id;
   std::string m_remote_group_id;
   GroupCtx *m_local_group_ctx;
   std::list<std::pair<librados::IoCtx, ImageReplayer<ImageCtxT> *>> *m_image_replayers;
+  std::list<std::pair<librados::IoCtx, ImageReplayer<ImageCtxT> *>> m_image_replayers_2;
+  std::map<std::pair<int64_t, std::string>, ImageReplayer<ImageCtxT> *> m_image_replayer_index;
 
   mutable ceph::mutex m_lock;
 
@@ -106,6 +127,10 @@ private:
   // map of <group_snap_id, vec<pair<cls::rbd::ImageSnapshotSpec, bool>>>
   std::map<std::string, std::vector<std::pair<cls::rbd::ImageSnapshotSpec, bool>>> m_pending_group_snaps;
 
+  typedef std::pair<int64_t /*pool_id*/, std::string /*global_image_id*/> GlobalImageId;
+  std::map<GlobalImageId, std::string /*image_id */> m_remote_snap_members;
+  int create_replayers_2(Context* on_finish);
+
   int local_group_image_list_by_id(
       std::vector<cls::rbd::GroupImageStatus> *image_ids);
 
@@ -122,6 +147,11 @@ private:
 
   void validate_image_snaps_sync_complete(const std::string &remote_group_snap_id);
   void scan_for_unsynced_group_snapshots(std::unique_lock<ceph::mutex>& locker);
+
+  void create_replayers(cls::rbd::GroupSnapshot *group_snap, Context* on_finish);
+
+  void start_image_replayers(Context* on_finish);
+  void handle_start_image_replayers(int r, Context* on_finish);
 
   void try_create_group_snapshot(cls::rbd::GroupSnapshot snap);
 
