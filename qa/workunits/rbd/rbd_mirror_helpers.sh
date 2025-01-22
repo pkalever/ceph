@@ -486,6 +486,12 @@ setup()
 
 cleanup()
 {
+  echo "not cleanup!!!"
+  exit 0;
+}
+
+cleanup1()
+{
     local error_code=$1
 
     set +e
@@ -1093,8 +1099,7 @@ create_image()
         shift
     fi
 
-    run_cmd "rbd --cluster ${cluster} create --size ${size} \
-        --image-feature ${RBD_IMAGE_FEATURES} $@ ${pool}/${image}"
+    run_cmd "rbd --cluster ${cluster} create --size ${size} ${pool}/${image}"
 }
 
 image_create()

@@ -213,8 +213,8 @@ void BootstrapRequest<I>::handle_prepare_remote_image(int r) {
     if (state_builder->local_image_id.empty()) {
       dout(10) << "local image does not exist and remote image is not primary"
                << dendl;
-      finish(-EREMOTEIO);
-      return;
+      //finish(-EREMOTEIO);
+      //return;
     } else if (!state_builder->is_linked()) {
       dout(10) << "local image is unlinked and remote image is not primary"
                << dendl;

@@ -220,10 +220,8 @@ private:
 
   group_replayer::BootstrapRequest<ImageCtxT> *m_bootstrap_request = nullptr;
   group_replayer::Replayer<ImageCtxT> *m_replayer = nullptr;
-  std::list<std::pair<librados::IoCtx, ImageReplayer<ImageCtxT> *>> m_image_replayers;
 
   Listener m_listener = {this};
-  std::map<std::pair<int64_t, std::string>, ImageReplayer<ImageCtxT> *> m_image_replayer_index;
   std::map<std::string, cls::rbd::GroupSnapshot> m_local_group_snaps;
   std::map<std::string, int> m_get_remote_group_snap_ret_vals;
   std::map<std::string, std::map<ImageReplayer<ImageCtxT> *, Context *>> m_create_snap_requests;
@@ -260,9 +258,6 @@ private:
   void create_group_replayer(Context *on_finish);
   void handle_create_group_replayer(int r, Context *on_finish);
 
-  void start_image_replayers();
-  void handle_start_image_replayers(int r);
-
   bool finish_start_if_interrupted();
   bool finish_start_if_interrupted(ceph::mutex &lock);
   void finish_start(int r, const std::string &desc);
@@ -270,19 +265,12 @@ private:
   void stop_group_replayer();
   void handle_stop_group_replayer(int r);
 
-  void stop_image_replayer(ImageReplayer<ImageCtxT> *image_replayer,
-                           Context *on_finish);
-  void stop_image_replayers();
-  void handle_stop_image_replayers(int r);
-
   void register_admin_socket_hook();
   void unregister_admin_socket_hook();
   void reregister_admin_socket_hook();
 
   void set_mirror_group_status_update(cls::rbd::MirrorGroupStatusState state,
                                       const std::string &desc);
-  void wait_for_ops();
-  void handle_wait_for_ops(int r);
 };
 
 } // namespace mirror

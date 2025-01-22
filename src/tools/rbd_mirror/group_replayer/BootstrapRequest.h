@@ -49,16 +49,12 @@ public:
       std::string *local_group_id,
       std::string *remote_group_id,
       std::map<std::string, cls::rbd::GroupSnapshot> *local_group_snaps,
-      GroupCtx *local_group_ctx,
-      std::list<std::pair<librados::IoCtx, ImageReplayer<ImageCtxT> *>> *image_replayers,
-      std::map<std::pair<int64_t, std::string>, ImageReplayer<ImageCtxT> *> *image_replayer_index,
-      Context *on_finish) {
+      GroupCtx *local_group_ctx, Context *on_finish) {
     return new BootstrapRequest(
       threads, local_io_ctx, remote_io_ctx, global_group_id, local_mirror_uuid,
       instance_watcher, local_status_updater, remote_status_updater,
       cache_manager_handler, pool_meta_cache, resync_requested, local_group_id,
-      remote_group_id, local_group_snaps, local_group_ctx, image_replayers,
-      image_replayer_index, on_finish);
+      remote_group_id, local_group_snaps, local_group_ctx, on_finish);
   }
 
   BootstrapRequest(
@@ -76,10 +72,7 @@ public:
       std::string *local_group_id,
       std::string *remote_group_id,
       std::map<std::string, cls::rbd::GroupSnapshot> *local_group_snaps,
-      GroupCtx *local_group_ctx,
-      std::list<std::pair<librados::IoCtx, ImageReplayer<ImageCtxT> *>> *image_replayers,
-      std::map<std::pair<int64_t, std::string>, ImageReplayer<ImageCtxT> *> *image_replayer_index,
-      Context* on_finish);
+      GroupCtx *local_group_ctx, Context* on_finish);
 
   void send() override;
   void cancel() override;
@@ -174,8 +167,6 @@ private:
   std::string *m_remote_group_id;
   std::map<std::string, cls::rbd::GroupSnapshot> *m_local_group_snaps;
   GroupCtx *m_local_group_ctx;
-  std::list<std::pair<librados::IoCtx, ImageReplayer<ImageCtxT> *>> *m_image_replayers;
-  std::map<std::pair<int64_t, std::string>, ImageReplayer<ImageCtxT> *> *m_image_replayer_index;
   Context *m_on_finish;
 
   std::atomic<bool> m_canceled = false;
@@ -273,8 +264,6 @@ private:
   void handle_create_local_non_primary_group_snapshot(int r);
 
   void finish(int r);
-
-  int create_replayers();
 };
 
 } // namespace group_replayer

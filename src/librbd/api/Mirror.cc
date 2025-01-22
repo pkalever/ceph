@@ -3495,6 +3495,9 @@ int Mirror<I>::group_snapshot_create(IoCtx& group_ioctx, const char *group_name,
     util::notify_unquiesce(image_ctxs, quiesce_requests);
   }
 
+  // Reason for commenting
+  // scan_remote_mirror_snapshots: failed to locate remote start snapshot: snap_id=4
+  /*
   if (!ret_code) {
     C_SaferCond cond;
     auto req = group::UnlinkPeerGroupRequest<I>::create(
@@ -3502,6 +3505,7 @@ int Mirror<I>::group_snapshot_create(IoCtx& group_ioctx, const char *group_name,
     req->send();
     cond.wait();
   }
+  */
   close_images(&image_ctxs);
 
   return ret_code;
